@@ -1,3 +1,4 @@
+[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/iMKcprNB)
 # <img src="frontend/favicon.svg" alt="logo" width="128" height="128" align="middle"> SI2 - Wumpus
 
 SI2-Wumpus is a modular simulation environment for the classic Wumpus World game, designed for testing and developing autonomous agents. The project features a Python-based WebSocket backend that handles the simulation engine, an HTML5 Canvas-based frontend for real-time visualization, and an extensible agent system that allows for easy implementation of custom AI strategies.
