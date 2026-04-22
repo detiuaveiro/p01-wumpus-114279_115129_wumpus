@@ -48,10 +48,11 @@ pip install pyright ruff
 Agents are executed locally and connect to the backend via WebSockets:
 ```bash
 # To run the manual control agent:
-python agents/manual_agent.py
+python -m agents.manual_agent
 
 # To run the dummy (random) agent:
-python agents/dummy_agent.py
+python -m agents.dummy_agent
+
 ```
 
 ## Project Structure
