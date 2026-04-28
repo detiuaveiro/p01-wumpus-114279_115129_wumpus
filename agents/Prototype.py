@@ -25,6 +25,7 @@ class DummyAgent(BaseAgent):
 
         self.Wumpus_positions: Set[str] = set() # Inicialização de posições possíveis do wumups
         self.Hole_positions: Set[str] = set() # Inicialização das posições possíveis de buracos
+        self.Wall_positions: Set[str] = set()
 
         self.map_size: Set[int] = set({0,0})
 
@@ -61,13 +62,18 @@ class DummyAgent(BaseAgent):
                 print(f"\n--- Agent at {pos[0],pos[1]} | Score: {score} | Arrows: {arrows} ---")
                 print(f"Percepts: [{percept_str}]")
 
-                directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+                directions = [
+                    ((1, 0), "E"),
+                    ((-1, 0), "W"),
+                    ((0, 1), "S"),
+                    ((0, -1), "N"),
+                ]
 
                 if percepts["breeze"] and percepts["stench"] and not self.Wumpus_detected:
 
                     print("\nFIRST CONDITION")
 
-                    for dx,dy in directions:
+                    for (dx,dy) , _ in directions:
                         nx, ny = pos[0] + dx, pos[1] + dy
 
                         if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
@@ -82,7 +88,7 @@ class DummyAgent(BaseAgent):
 
                     print("\nSECOND CONDITION")
 
-                    for dx,dy in directions:
+                    for (dx,dy) , _ in directions:
                         nx, ny = pos[0] + dx, pos[1] + dy
 
                         if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
@@ -96,7 +102,7 @@ class DummyAgent(BaseAgent):
 
                     print("\nTHIRD CONDITION")
 
-                    for dx,dy in directions:
+                    for (dx,dy) , _ in directions:
                         nx, ny = pos[0] + dx, pos[1] + dy
 
                         if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
@@ -110,18 +116,29 @@ class DummyAgent(BaseAgent):
                     self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
                     self.Wumpus_detected = True     # Após detetarmos um Wumpus então fica fixo essas posições e não se acrescentam mais
 
-
-
-                elif not percepts["stench"] and not percepts["breeze"]:
+                elif percepts["bump"]:
 
                     print("\nFOURTH CONDITION")
+
+                    for (dx,dy) , name in directions:
+
+                        if self.last_action[1] == name:
+                            nx , ny = pos[0] + dx , pos[1] + dy
+
+                            self.Wall_positions.add(f"{nx},{ny}")
+                            self.safe_cells.remove(f"{nx},{ny}")
+
+
+                elif not percepts["stench"] and not percepts["breeze"] and not percepts["bump"]:
+
+                    print("\nFIFTH CONDITION")
 
                     directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
                     for dx, dy in directions:
                         nx, ny = pos[0] + dx, pos[1] + dy
 
-                        if 0 <= nx < map_size[0] and 0 <= ny < map_size[1]:
+                        if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.Wall_positions:
                             self.safe_cells.add(f"{nx},{ny}")
 
                 self.safe_cells.add(f"{pos[0]},{pos[1]}")
@@ -150,6 +167,7 @@ class DummyAgent(BaseAgent):
         print("Visited cells: ",self.visited)
         print("Wumpus cells: ",self.Wumpus_positions)
         print("Hole positions: ",self.Hole_positions)
+        print("Wall Positions: ",self.Wall_positions)
 
         directions = [
             ((1, 0), "E"),
@@ -221,6 +239,7 @@ class DummyAgent(BaseAgent):
         self.Wumpus_positions.clear()
         self.Hole_positions.clear()
         self.map_size.clear()
+        self.Wall_positions.clear()
 
         self.Wumpus_detected = False
         self.last_action = None
