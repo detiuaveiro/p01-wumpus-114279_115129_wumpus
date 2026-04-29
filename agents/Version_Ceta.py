@@ -23,11 +23,9 @@ class DummyAgent(BaseAgent):
         self.visited: Set[str] = set() # Self visited não vai ser tão importante como safe cells
         self.safe_cells: Set[str] = set() # Safe cells, são célula seguras
 
-        self.Wumpus_positions: Set[str]= set() # Inicialização de posições possíveis do wumups
-        self.Hole_positions: Set[str] = set() # Inicialização das posições possíveis de buracos
+        self.Wumpus_positions: dict[str,int] = dict() # Inicialização de posições possíveis do wumups
+        self.Hole_positions: dict[str,int] = dict() # Inicialização das posições possíveis de buracos
         self.Wall_positions: Set[str] = set() # Iniciialização de posições de paredes
-
-        self.Dangerous_spots: Set[str] = set()
 
 
         self.map_size: Set[int] = set({0,0})
@@ -89,12 +87,10 @@ class DummyAgent(BaseAgent):
                             self.Wall_positions.add(f"{nx},{ny}")
 
                         if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
-                            self.Hole_positions.add(f"{nx},{ny}")
-                            self.Wumpus_positions.add(f"{nx},{ny}")
+                            self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
+                            self.Wumpus_positions[f"{nx},{ny}"] = self.Wumpus_positions.get(f"{nx},{ny}",0) + 1
 
                     self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
-                    self.Dangerous_spots.add(f"{pos[0]},{pos[1]}")
-                    self.Wumpus_detected = True     # Após detetarmos um Wumpus então fica fixo essas posições e não se acrescentam mais
 
 
                 elif percepts["breeze"] and percepts["stench"] and not self.Wumpus_detected:
@@ -105,12 +101,10 @@ class DummyAgent(BaseAgent):
                         nx, ny = pos[0] + dx, pos[1] + dy
 
                         if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
-                            self.Hole_positions.add(f"{nx},{ny}")
-                            self.Wumpus_positions.add(f"{nx},{ny}")
+                            self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
+                            self.Wumpus_positions[f"{nx},{ny}"] = self.Wumpus_positions.get(f"{nx},{ny}",0) + 1
 
                     self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
-                    self.Dangerous_spots.add(f"{pos[0]},{pos[1]}")
-                    self.Wumpus_detected = True     # Após detetarmos um Wumpus então fica fixo essas posições e não se acrescentam mais
 
 
 
@@ -126,12 +120,9 @@ class DummyAgent(BaseAgent):
                             self.Wall_positions.add(f"{nx},{ny}")
 
                             if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
-                                self.Hole_positions.add(f"{nx},{ny}")
+                                self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
 
-                                if f"{nx},{ny}" in self.Wumpus_positions:
-                                    self.safe_cells.add(f"{nx},{ny}")
 
-                    self.Dangerous_spots.add(f"{pos[0]},{pos[1]}")
 
 
                 elif percepts["bump"]:
@@ -154,12 +145,8 @@ class DummyAgent(BaseAgent):
                         nx, ny = pos[0] + dx, pos[1] + dy
 
                         if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
-                            self.Hole_positions.add(f"{nx},{ny}")
+                            self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
 
-                            if f"{nx},{ny}" in self.Wumpus_positions:
-                                self.safe_cells.add(f"{nx},{ny}")
-
-                    self.Dangerous_spots.add(f"{pos[0]},{pos[1]}")
 
 
                 elif percepts["stench"] and (not self.Wumpus_detected):
@@ -171,14 +158,13 @@ class DummyAgent(BaseAgent):
 
                         if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
                            
-                            self.Wumpus_positions.add(f"{nx},{ny}")
+                            self.Wumpus_positions[f"{nx},{ny}"] = self.Wumpus_positions.get(f"{nx},{ny}",0) + 1
 
                             if f"{nx},{ny}" in self.Hole_positions:
                                 self.safe_cells.add(f"{nx},{ny}")
                                 print("Taken from wumpus: ",nx,ny)
 
                     self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
-                    self.Wumpus_detected = True     # Após detetarmos um Wumpus então fica fixo essas posições e não se acrescentam mais
 
 
                 elif not percepts["stench"] and not percepts["breeze"] and not percepts["bump"]:
@@ -197,10 +183,15 @@ class DummyAgent(BaseAgent):
 
                 self.safe_cells -= self.Wall_positions
 
-                self.Wumpus_positions -= self.safe_cells
-                self.Hole_positions -= self.safe_cells
+                for cell in self.safe_cells:
+                    self.Wumpus_positions.pop(cell, None)
+                    self.Hole_positions.pop(cell, None)
 
-                self.Hole_positions -= self.Wall_positions
+                for cell in self.Wall_positions:
+                    self.Hole_positions.pop(cell, None)
+
+                if len(self.Wumpus_positions) == 1:
+                    self.Wumpus_detected = True
 
 
             self.last_visitedCell = f"{pos[0]},{pos[1]}"
@@ -208,7 +199,23 @@ class DummyAgent(BaseAgent):
             if not self.current_state.get("running"):
                 print("Termination Reason: ",self.current_state.get("termination_reason"))
 
+                if self.current_state.get("termination_reason") == "GAME OVER: Wumpus!":
+                    self.Wumpus_positions[self.last_visitedCell] = self.Wumpus_positions.get(self.last_visitedCell,0) + 100
 
+                    for cells in self.Wumpus_positions:
+                        if cells != self.last_visitedCell:
+                            self.Wumpus_positions.pop(self.last_visitedCell, None)
+
+                    self.safe_cells.remove(self.last_visitedCell)
+
+                if self.current_state.get("termination_reason") == "GAME OVER: Pit!":
+                    self.Hole_positions[self.last_visitedCell] = self.Hole_positions.get(self.last_visitedCell,0) + 100
+                    self.safe_cells.remove(self.last_visitedCell)
+
+
+
+    def get_risk(self, cell: str) -> float:
+        return self.Hole_positions.get(cell, 0) + self.Wumpus_positions.get(cell, 0)
 
     async def deliberate(self) -> Optional[Union[str, Tuple[str, str]]]:
         """
@@ -223,9 +230,9 @@ class DummyAgent(BaseAgent):
         cell_options = [] # Opções de escolha para deslocar para uma célula segura
         dangerous_moves = [] # Opção de escolha para deslocar para uma célula perigosa
 
-        #print("Safe cells: ",self.safe_cells)
-        #print("Visited cells: ",self.visited)
-        #print("Wumpus cells: ",self.Wumpus_positions)
+        print("Safe cells: ",self.safe_cells)
+        print("Visited cells: ",self.visited)
+        print("Wumpus cells: ",self.Wumpus_positions)
         print("Hole positions: ",self.Hole_positions)
         print("Wall Positions: ",self.Wall_positions)
 
@@ -240,60 +247,44 @@ class DummyAgent(BaseAgent):
         if self.current_state:
             pos = self.current_state.get("position")
 
+            candidates = []
+
             for (dx, dy), name in directions:
                 nx, ny = pos[0] + dx, pos[1] + dy
                 cell = f"{nx},{ny}"
 
-                if cell in self.safe_cells:
-                    cell_options.append((cell, name))
+                if cell in self.Wall_positions:
+                    continue
 
-                if cell in self.Dangerous_spots:
-                    dangerous_moves.append((cell, name))
+                risk = self.get_risk(cell)
+
+                if cell in self.safe_cells and cell not in self.visited:
+                    priority = 0
+                elif cell in self.safe_cells:
+                    priority = 1
+                else:
+                    priority = 2
+
+                candidates.append((cell, name, priority, risk))
 
 
-            unvisited_safe = self.safe_cells - self.visited
+            if candidates:
+                candidates.sort(key=lambda x: (x[2], x[3]))
 
+                best_priority = candidates[0][2]
+                best_candidates = [c for c in candidates if c[2] == best_priority]
 
-            new_moves = [(cell, d) for (cell, d) in cell_options if cell in unvisited_safe]
+                min_risk = min(c[3] for c in best_candidates)
+                best_moves = [c for c in best_candidates if c[3] == min_risk]
 
-            visited_moves = [
-                (cell, d) for (cell, d) in cell_options
-                if cell in self.visited and cell != self.last_visitedCell
-            ]
+                print("Best moves: ",best_moves)
 
-            dangerous_moves = [
-                (cell, d) for (cell, d) in dangerous_moves
-                if cell not in self.visited
-            ]
+                cell_to_move, direction, _, risk = random.choice(best_moves)
 
-            print("New Moves: ",new_moves)
-            print("Visited Moves: ",visited_moves)
-            print("Dangerous Moves: ",dangerous_moves)
+                print(f"Moving {direction} to {cell_to_move} (risk={risk})")
 
-            if new_moves:
-                cell_to_move, direction = random.choice(new_moves)
-
-            elif visited_moves:
-                cell_to_move, direction = random.choice(visited_moves)
-
-            elif self.Dangerous_spots:
-                print("WE RISKING ITTTTTT")
-                cell_to_move, direction = random.choice(self.Dangerous_spots)
-
-            else:
-                print("WE DOING RANDOM BOYSSSS")
-
-                if random.random() < 0.1:
-                    self.last_action = ("shoot", random.choice(["N", "S", "E", "W"]))
-                    return self.last_action
-
-                direction = random.choice(["N", "S", "E", "W"])
                 self.last_action = ("move", direction)
                 return direction
-
-            print("Moving", direction, "to", cell_to_move)
-            self.last_action = ("move", direction)
-            return direction
 
 
 
@@ -310,7 +301,6 @@ class DummyAgent(BaseAgent):
                 self.Hole_positions.clear()
                 self.map_size.clear()
                 self.Wall_positions.clear()
-                self.Dangerous_spots.clear()
 
                 self.Wumpus_detected = False
 
