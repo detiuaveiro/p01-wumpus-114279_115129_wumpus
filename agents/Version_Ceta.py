@@ -43,13 +43,37 @@ class DummyAgent(BaseAgent):
 
 
 
+
     def update_memory(self) -> None:
         """Track where we have been just to paint the UI blue."""
         # Isto será mais usado para atualizar as variáveis que temos em relação à memóra 
 
+
+
         if self.current_state:
             pos = self.current_state.get("position")
+
+            print((self.current_state.get("map_name")  != self.map_name))
+
+            current_map = self.current_state.get("map_name")
+
+            if current_map != self.map_name:
+
+                print("WE ARE RESSETING THE CELLS!")
+
+                self.safe_cells.clear()
+                self.Wumpus_positions.clear()
+                self.Hole_positions.clear()
+                self.map_size.clear()
+                self.Wall_positions.clear()
+
+                self.Wumpus_detected = False
+            
             self.map_name = self.current_state.get("map_name")
+
+            number_of_holes = 0 # Incrementamos isto, caso seja só 1 buraco então damos mais peso a esse para que o agente arrisque entre dois
+                    # por exemplo no 2º mapa
+            Last_hole_position = None
 
             if pos:
                 self.visited.add(f"{pos[0]},{pos[1]}")
@@ -63,6 +87,7 @@ class DummyAgent(BaseAgent):
                 arrows = self.current_state.get("arrows", 0)
 
                 map_size: list[int] = list([self.current_state.get("width",0),self.current_state.get("height",0)]) # Inicialização do tamanho do mapa
+
 
                 print(f"\n--- Agent at {pos[0],pos[1]} | Score: {score} | Arrows: {arrows} ---")
                 print(f"Percepts: [{percept_str}]")
@@ -90,6 +115,12 @@ class DummyAgent(BaseAgent):
                             self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
                             self.Wumpus_positions[f"{nx},{ny}"] = self.Wumpus_positions.get(f"{nx},{ny}",0) + 1
 
+                            Last_hole_position = f"{nx},{ny}"
+                            number_of_holes += 1
+
+                    if number_of_holes == 1 and Last_hole_position:
+                        self.Hole_positions[Last_hole_position] += 100
+
                     self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
 
 
@@ -100,9 +131,15 @@ class DummyAgent(BaseAgent):
                     for (dx,dy) , _ in directions:
                         nx, ny = pos[0] + dx, pos[1] + dy
 
-                        if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
+                        if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in (self.safe_cells and self.Wall_positions):
                             self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
                             self.Wumpus_positions[f"{nx},{ny}"] = self.Wumpus_positions.get(f"{nx},{ny}",0) + 1
+                            
+                            Last_hole_position = f"{nx},{ny}"
+                            number_of_holes += 1
+
+                    if number_of_holes == 1 and Last_hole_position:
+                        self.Hole_positions[Last_hole_position] += 100
 
                     self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
 
@@ -122,6 +159,11 @@ class DummyAgent(BaseAgent):
                             if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
                                 self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
 
+                                Last_hole_position = f"{nx},{ny}"
+                                number_of_holes += 1
+
+                    if number_of_holes == 1 and Last_hole_position:
+                        self.Hole_positions[Last_hole_position] += 100
 
 
 
@@ -147,6 +189,11 @@ class DummyAgent(BaseAgent):
                         if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
                             self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
 
+                            Last_hole_position = f"{nx},{ny}"
+                            number_of_holes += 1
+
+                    if number_of_holes == 1 and Last_hole_position:
+                        self.Hole_positions[Last_hole_position] += 100
 
 
                 elif percepts["stench"] and (not self.Wumpus_detected):
@@ -171,9 +218,7 @@ class DummyAgent(BaseAgent):
 
                     print("\nSEVENTH CONDITION")
 
-                    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-
-                    for dx, dy in directions:
+                    for (dx, dy) , _ in directions:
                         nx, ny = pos[0] + dx, pos[1] + dy
 
                         if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.Wall_positions:
@@ -291,18 +336,6 @@ class DummyAgent(BaseAgent):
     def reset_memory(self) -> None:
         """Clears the set of visited tiles."""
         self.visited.clear()
-
-        if self.current_state:
-
-            if (self.current_state.get("map_name")  == self.map_name):
-
-                self.safe_cells.clear()
-                self.Wumpus_positions.clear()
-                self.Hole_positions.clear()
-                self.map_size.clear()
-                self.Wall_positions.clear()
-
-                self.Wumpus_detected = False
 
         self.last_action = None
         self.last_visitedCell = None
