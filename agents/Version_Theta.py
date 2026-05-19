@@ -202,8 +202,14 @@ class DummyAgent(BaseAgent):
                             Last_hole_position = f"{nx},{ny}"
                             number_of_holes += 1
 
+                        if f"{nx},{ny}" in self.Wumpus_positions:
+                            self.safe_cells.add(f"{nx},{ny}")
+                            print("Taken from Holes: ",nx,ny)
+
                     if number_of_holes == 1 and Last_hole_position:
                         self.Hole_positions[Last_hole_position] += 100
+
+                    
 
 
                 elif percepts["stench"] and (not self.Wumpus_detected):
