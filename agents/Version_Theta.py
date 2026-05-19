@@ -162,7 +162,7 @@ class DummyAgent(BaseAgent):
                         if number_of_holes == 1 and Last_hole_position:
                             self.Hole_positions[Last_hole_position] += 100
 
-                        self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
+                        self.detected_Wumpus_cell = f"{pos[0]},{pos[1]}"
 
 
                     elif percepts["breeze"] and percepts["stench"]:
@@ -187,7 +187,7 @@ class DummyAgent(BaseAgent):
                         if number_of_holes == 1 and Last_hole_position:
                             self.Hole_positions[Last_hole_position] += 100
 
-                        self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
+                        self.detected_Wumpus_cell = f"{pos[0]},{pos[1]}"
 
 
 
@@ -266,7 +266,7 @@ class DummyAgent(BaseAgent):
                                     self.safe_cells.add(f"{nx},{ny}")
                                     print("Taken from wumpus: ",nx,ny)
 
-                        self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
+                        self.detected_Wumpus_cell = f"{pos[0]},{pos[1]}"
 
                     
                     elif percepts["scream"]:
@@ -302,7 +302,9 @@ class DummyAgent(BaseAgent):
                     self.safe_cells -= self.Wall_positions
 
                     for cell in self.safe_cells:
-                        self.Wumpus_positions.pop(cell, None)
+                        if not self.Wumpus_detected:
+                                self.Wumpus_positions.pop(cell, None)
+
                         self.Hole_positions.pop(cell, None)
 
                     for cell in self.Wall_positions:
@@ -322,6 +324,7 @@ class DummyAgent(BaseAgent):
                             and best_score >= 2
                         ):
                             self.Wumpus_detected = True
+                            self.detected_Wumpus_cell = best_cell
 
 
 
@@ -458,33 +461,23 @@ class DummyAgent(BaseAgent):
 
 
             if self.Wumpus_positions:            
-                max_value = max(self.Wumpus_positions.values())
+                if self.Wumpus_detected and self.detected_Wumpus_cell and arrows > 0:
+                    wx, wy = map(int, self.detected_Wumpus_cell.split(","))
 
-                if list(self.Wumpus_positions.values()).count(max_value) == 1:
-                    print("Wumpus in this cell:", max_value)
-
-
-                # Se soubermos a posição do wumpus exatamente
-                if (
-                    self.Wumpus_detected
-                    and list(self.Wumpus_positions.values()).count(max_value) == 1
-                    and arrows > 0
-                ):
-
-                    wumpus_cell = max(
-                        self.Wumpus_positions,
-                        key=self.Wumpus_positions.get
+                    is_adjacent = any(
+                        pos[0] + dx == wx and pos[1] + dy == wy
+                        for (dx, dy), _ in directions
                     )
-                    wx, wy = map(int, wumpus_cell.split(","))
 
-                    # Vemos se o wumpus está adjacente
-                    for (dx, dy), direction in directions:
-                        nx, ny = pos[0] + dx, pos[1] + dy
+                    if is_adjacent:
+                        shoot_dir = next(
+                            direction
+                            for (dx, dy), direction in directions
+                            if pos[0] + dx == wx and pos[1] + dy == wy
+                        )
 
-                        if nx == wx and ny == wy:
-                            print(f"Shooting Wumpus at {wumpus_cell} -> {direction}")
-                            self.last_action = ("shoot", direction)
-                            return ("shoot", direction)
+                        self.last_action = ("shoot", shoot_dir)
+                        return ("shoot", shoot_dir)
 
             # Se um caminho do BFS estiver em progresso, corre-o um passo de cada vez.
             # Antes de andar o próximo passo, verifica se a próxima célula do caminho se tornou perigosa 
