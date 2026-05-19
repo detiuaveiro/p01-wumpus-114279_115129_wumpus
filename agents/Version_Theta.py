@@ -22,6 +22,7 @@ class DummyAgent(BaseAgent):
         self.Wumpus_positions: dict[str,int] = dict() # Inicialização de posições possíveis do wumups
         self.Hole_positions: dict[str,int] = dict() # Inicialização das posições possíveis de buracos
         self.Wall_positions: Set[str] = set() # Iniciialização de posições de paredes
+        self.dead_wumpus_cells: Set[str] = set()
 
 
         self.map_size: Set[int] = set({0,0})
@@ -75,6 +76,7 @@ class DummyAgent(BaseAgent):
                 self.position_history.clear()
                 self.escape_path.clear()
                 self.confirmed_pits.clear()
+                self.dead_wumpus_cells.clear()
 
                 self.Wumpus_detected = False
             
@@ -85,194 +87,242 @@ class DummyAgent(BaseAgent):
             Last_hole_position = None
 
             if pos:
+
+                self.last_visitedCell = f"{pos[0]},{pos[1]}"
                 self.visited.add(f"{pos[0]},{pos[1]}")
                 self.position_history.append(f"{pos[0]},{pos[1]}")
 
-                percepts = self.current_state.get("percepts", {}) if self.current_state else {}
+                if not self.current_state.get("running"):
+                    print("Termination Reason: ",self.current_state.get("termination_reason"))
 
-                active_percepts = [k.capitalize() for k, v in percepts.items() if v]
-                percept_str = ", ".join(active_percepts) if active_percepts else "None"
+                    if self.current_state.get("termination_reason") == "GAME OVER: Wumpus!":
+                        confirmed_score = self.Wumpus_positions.get(self.last_visitedCell, 0) + 100
+                        # Reconstroi o dict apenas com a célula do Wumpus confirmada — evita o erro de 
+                        # "dictionary changed size during iteration" from pop() inside a loop
+                        self.Wumpus_positions = {self.last_visitedCell: confirmed_score}
+                        self.Wumpus_detected = True
+                        self.safe_cells.discard(self.last_visitedCell)
 
-                score = self.current_state.get("score", 0)
-                arrows = self.current_state.get("arrows", 0)
+                    if self.current_state.get("termination_reason") == "GAME OVER: Pit!":
+                        self.Hole_positions[self.last_visitedCell] = self.Hole_positions.get(self.last_visitedCell,0) + 100
+                        # Guarda a célula onde o agente morreu como um buraco confirmado para nunca mais arriscar entrar nela.
+                        self.confirmed_pits.add(self.last_visitedCell)
+                        self.safe_cells.discard(self.last_visitedCell)
 
-                map_size: list[int] = list([self.current_state.get("width",0),self.current_state.get("height",0)]) # Inicialização do tamanho do mapa
-
-
-                print(f"\n--- Agent at {pos[0],pos[1]} | Score: {score} | Arrows: {arrows} ---")
-                print(f"Percepts: [{percept_str}]")
-
-                directions = [
-                    ((1, 0), "E"),
-                    ((-1, 0), "W"),
-                    ((0, 1), "S"),
-                    ((0, -1), "N"),
-                ]
-
-                if percepts["breeze"] and percepts["stench"] and percepts["bump"] and not self.Wumpus_detected:
-
-                    print("\nFIRST CONDITION")
-
-                    for (dx,dy) , _ in directions:
-                        nx, ny = pos[0] + dx, pos[1] + dy
-
-                        if self.last_action[1] == name:
-                            nx , ny = pos[0] + dx , pos[1] + dy
-
-                            self.Wall_positions.add(f"{nx},{ny}")
-
-                        if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
-                            self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
-                            self.Wumpus_positions[f"{nx},{ny}"] = self.Wumpus_positions.get(f"{nx},{ny}",0) + 1
-
-                            Last_hole_position = f"{nx},{ny}"
-                            number_of_holes += 1
-
-                    if number_of_holes == 1 and Last_hole_position:
-                        self.Hole_positions[Last_hole_position] += 100
-
-                    self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
+                else:
 
 
-                elif percepts["breeze"] and percepts["stench"] and not self.Wumpus_detected:
+                    self.visited.add(f"{pos[0]},{pos[1]}")
+                    self.position_history.append(f"{pos[0]},{pos[1]}")
 
-                    print("\nSECOND CONDITION")
+                    percepts = self.current_state.get("percepts", {}) if self.current_state else {}
 
-                    for (dx,dy) , _ in directions:
-                        nx, ny = pos[0] + dx, pos[1] + dy
+                    active_percepts = [k.capitalize() for k, v in percepts.items() if v]
+                    percept_str = ", ".join(active_percepts) if active_percepts else "None"
 
-                        if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in (self.safe_cells and self.Wall_positions):
-                            self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
-                            self.Wumpus_positions[f"{nx},{ny}"] = self.Wumpus_positions.get(f"{nx},{ny}",0) + 1
-                            
-                            Last_hole_position = f"{nx},{ny}"
-                            number_of_holes += 1
+                    score = self.current_state.get("score", 0)
+                    arrows = self.current_state.get("arrows", 0)
 
-                    if number_of_holes == 1 and Last_hole_position:
-                        self.Hole_positions[Last_hole_position] += 100
-
-                    self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
+                    map_size: list[int] = list([self.current_state.get("width",0),self.current_state.get("height",0)]) # Inicialização do tamanho do mapa
 
 
+                    print(f"\n--- Agent at {pos[0],pos[1]} | Score: {score} | Arrows: {arrows} ---")
+                    print(f"Percepts: [{percept_str}]")
 
-                elif percepts["bump"] and percepts["breeze"]:
+                    directions = [
+                        ((1, 0), "E"),
+                        ((-1, 0), "W"),
+                        ((0, 1), "S"),
+                        ((0, -1), "N"),
+                    ]
 
-                    print("\nTHIRD CONDITION")
+                    if percepts["breeze"] and percepts["stench"] and percepts["bump"]:
 
-                    for (dx,dy) , name in directions:
+                        print("\nFIRST CONDITION")
 
-                        if self.last_action[1] == name:
-                            nx , ny = pos[0] + dx , pos[1] + dy
+                        for (dx,dy) , _ in directions:
+                            nx, ny = pos[0] + dx, pos[1] + dy
 
-                            self.Wall_positions.add(f"{nx},{ny}")
+                            if self.last_action[1] == name:
+                                nx , ny = pos[0] + dx , pos[1] + dy
 
-                            if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
+                                self.Wall_positions.add(f"{nx},{ny}")
+
+                            if (    0 <= nx < map_size[0] and
+                                    0 <= ny < map_size[1] and
+                                    f"{nx},{ny}" not in self.safe_cells and
+                                    f"{nx},{ny}" not in self.dead_wumpus_cells):
+                                
+                                self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
+                                self.Wumpus_positions[f"{nx},{ny}"] = self.Wumpus_positions.get(f"{nx},{ny}",0) + 1
+
+                                Last_hole_position = f"{nx},{ny}"
+                                number_of_holes += 1
+
+                        if number_of_holes == 1 and Last_hole_position:
+                            self.Hole_positions[Last_hole_position] += 100
+
+                        self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
+
+
+                    elif percepts["breeze"] and percepts["stench"]:
+
+                        print("\nSECOND CONDITION")
+
+                        for (dx,dy) , _ in directions:
+                            nx, ny = pos[0] + dx, pos[1] + dy
+
+                            if (    0 <= nx < map_size[0] and
+                                    0 <= ny < map_size[1] and
+                                    f"{nx},{ny}" not in self.safe_cells and
+                                    f"{nx},{ny}" not in self.Wall_positions and
+                                    f"{nx},{ny}" not in self.dead_wumpus_cells):
+
+                                self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
+                                self.Wumpus_positions[f"{nx},{ny}"] = self.Wumpus_positions.get(f"{nx},{ny}",0) + 1
+                                
+                                Last_hole_position = f"{nx},{ny}"
+                                number_of_holes += 1
+
+                        if number_of_holes == 1 and Last_hole_position:
+                            self.Hole_positions[Last_hole_position] += 100
+
+                        self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
+
+
+
+                    elif percepts["bump"] and percepts["breeze"]:
+
+                        print("\nTHIRD CONDITION")
+
+                        for (dx,dy) , name in directions:
+
+                            if self.last_action[1] == name:
+                                nx , ny = pos[0] + dx , pos[1] + dy
+
+                                self.Wall_positions.add(f"{nx},{ny}")
+
+                                if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
+                                    self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
+
+                                    Last_hole_position = f"{nx},{ny}"
+                                    number_of_holes += 1
+
+                        if number_of_holes == 1 and Last_hole_position:
+                            self.Hole_positions[Last_hole_position] += 100
+
+
+
+                    elif percepts["bump"]:
+
+                        print("\nFORTH CONDITION")
+
+                        for (dx,dy) , name in directions:
+
+                            if self.last_action[1] == name:
+                                nx , ny = pos[0] + dx , pos[1] + dy
+
+                                self.Wall_positions.add(f"{nx},{ny}")
+
+
+                    elif percepts["breeze"]:
+
+                        print("\nFIFTH CONDITION")
+
+                        for (dx,dy) , _ in directions:
+                            nx, ny = pos[0] + dx, pos[1] + dy
+
+                            if (    0 <= nx < map_size[0] and
+                                    0 <= ny < map_size[1] and
+                                    f"{nx},{ny}" not in self.safe_cells):
+                                
                                 self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
 
                                 Last_hole_position = f"{nx},{ny}"
                                 number_of_holes += 1
 
-                    if number_of_holes == 1 and Last_hole_position:
-                        self.Hole_positions[Last_hole_position] += 100
+
+                        if number_of_holes == 1 and Last_hole_position:
+                            self.Hole_positions[Last_hole_position] += 100
+
+                        
 
 
+                    elif percepts["stench"]:
 
-                elif percepts["bump"]:
+                        print("\nSIXTH CONDITION")
 
-                    print("\nFORTH CONDITION")
+                        for (dx,dy) , _ in directions:
+                            nx, ny = pos[0] + dx, pos[1] + dy
 
-                    for (dx,dy) , name in directions:
+                            if (    0 <= nx < map_size[0] and
+                                    0 <= ny < map_size[1] and
+                                    f"{nx},{ny}" not in self.safe_cells and
+                                    f"{nx},{ny}" not in self.dead_wumpus_cells):
+                            
+                                self.Wumpus_positions[f"{nx},{ny}"] = self.Wumpus_positions.get(f"{nx},{ny}",0) + 1
 
-                        if self.last_action[1] == name:
-                            nx , ny = pos[0] + dx , pos[1] + dy
+                                if f"{nx},{ny}" in self.Hole_positions:
+                                    self.safe_cells.add(f"{nx},{ny}")
+                                    print("Taken from wumpus: ",nx,ny)
 
-                            self.Wall_positions.add(f"{nx},{ny}")
-
-
-                elif percepts["breeze"]:
-
-                    print("\nFIFTH CONDITION")
-
-                    for (dx,dy) , _ in directions:
-                        nx, ny = pos[0] + dx, pos[1] + dy
-
-                        if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
-                            self.Hole_positions[f"{nx},{ny}"] = self.Hole_positions.get(f"{nx},{ny}", 0) + 1
-
-                            Last_hole_position = f"{nx},{ny}"
-                            number_of_holes += 1
-
-                        if f"{nx},{ny}" in self.Wumpus_positions:
-                            self.safe_cells.add(f"{nx},{ny}")
-                            print("Taken from Holes: ",nx,ny)
-
-                    if number_of_holes == 1 and Last_hole_position:
-                        self.Hole_positions[Last_hole_position] += 100
+                        self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
 
                     
+                    elif percepts["scream"]:
+                        print("\nSEVENTH CONDITION")
+
+                        if self.Wumpus_positions:
+
+                            killed_cell = max(
+                                self.Wumpus_positions,
+                                key=self.Wumpus_positions.get
+                            )
+
+                            self.dead_wumpus_cells.add(killed_cell)
+
+                        self.Wumpus_positions.clear()
+                        self.Wumpus_detected = False
 
 
-                elif percepts["stench"] and (not self.Wumpus_detected):
+                    elif not percepts["stench"] and not percepts["breeze"] and not percepts["bump"]:
 
-                    print("\nSIXTH CONDITION")
+                        print("\nEIGHT CONDITION")
 
-                    for (dx,dy) , _ in directions:
-                        nx, ny = pos[0] + dx, pos[1] + dy
+                        for (dx, dy) , _ in directions:
+                            nx, ny = pos[0] + dx, pos[1] + dy
 
-                        if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.safe_cells:
-                           
-                            self.Wumpus_positions[f"{nx},{ny}"] = self.Wumpus_positions.get(f"{nx},{ny}",0) + 1
-
-                            if f"{nx},{ny}" in self.Hole_positions:
+                            if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.Wall_positions:
                                 self.safe_cells.add(f"{nx},{ny}")
-                                print("Taken from wumpus: ",nx,ny)
+                                
 
-                    self.detected_Wumpus_cell = f"{pos[0],pos[1]}"
+                    self.safe_cells.add(f"{pos[0]},{pos[1]}")
+                    self.safe_cells |= self.dead_wumpus_cells
 
+                    self.safe_cells -= self.Wall_positions
 
-                elif not percepts["stench"] and not percepts["breeze"] and not percepts["bump"]:
+                    for cell in self.safe_cells:
+                        self.Wumpus_positions.pop(cell, None)
+                        self.Hole_positions.pop(cell, None)
 
-                    print("\nSEVENTH CONDITION")
+                    for cell in self.Wall_positions:
+                        self.Hole_positions.pop(cell, None)
 
-                    for (dx, dy) , _ in directions:
-                        nx, ny = pos[0] + dx, pos[1] + dy
+                    if self.Wumpus_positions:
 
-                        if 0 <= nx < map_size[0] and 0 <= ny < map_size[1] and f"{nx},{ny}" not in self.Wall_positions:
-                            self.safe_cells.add(f"{nx},{ny}")
+                        best_cell = max(
+                            self.Wumpus_positions,
+                            key=self.Wumpus_positions.get
+                        )
 
-                self.safe_cells.add(f"{pos[0]},{pos[1]}")
+                        best_score = self.Wumpus_positions[best_cell]
 
-                self.safe_cells -= self.Wall_positions
+                        if (
+                            list(self.Wumpus_positions.values()).count(best_score) == 1
+                            and best_score >= 2
+                        ):
+                            self.Wumpus_detected = True
 
-                for cell in self.safe_cells:
-                    self.Wumpus_positions.pop(cell, None)
-                    self.Hole_positions.pop(cell, None)
-
-                for cell in self.Wall_positions:
-                    self.Hole_positions.pop(cell, None)
-
-                if len(self.Wumpus_positions) == 1:
-                    self.Wumpus_detected = True
-
-
-            self.last_visitedCell = f"{pos[0]},{pos[1]}"
-
-            if not self.current_state.get("running"):
-                print("Termination Reason: ",self.current_state.get("termination_reason"))
-
-                if self.current_state.get("termination_reason") == "GAME OVER: Wumpus!":
-                    confirmed_score = self.Wumpus_positions.get(self.last_visitedCell, 0) + 100
-                    # Reconstroi o dict apenas com a célula do Wumpus confirmada — evita o erro de 
-                    # "dictionary changed size during iteration" from pop() inside a loop
-                    self.Wumpus_positions = {self.last_visitedCell: confirmed_score}
-                    self.Wumpus_detected = True
-                    self.safe_cells.discard(self.last_visitedCell)
-
-                if self.current_state.get("termination_reason") == "GAME OVER: Pit!":
-                    self.Hole_positions[self.last_visitedCell] = self.Hole_positions.get(self.last_visitedCell,0) + 100
-                    # Guarda a célula onde o agente morreu como um buraco confirmado para nunca mais arriscar entrar nela.
-                    self.confirmed_pits.add(self.last_visitedCell)
-                    self.safe_cells.discard(self.last_visitedCell)
 
 
 
@@ -296,6 +346,10 @@ class DummyAgent(BaseAgent):
             return True
         if cell in self.confirmed_pits:
             return True
+        
+        if cell in self.dead_wumpus_cells:
+            return False
+
         if self.Wumpus_detected and len(self.Wumpus_positions) == 1 and cell in self.Wumpus_positions:
             return True
         return False
@@ -382,9 +436,6 @@ class DummyAgent(BaseAgent):
 
         # Isto será usado para fazermos as ações do agente
 
-        cell_options = [] # Opções de escolha para deslocar para uma célula segura
-        dangerous_moves = [] # Opção de escolha para deslocar para uma célula perigosa
-
         print("Safe cells: ",self.safe_cells)
         print("Visited cells: ",self.visited)
         print("Wumpus cells: ",self.Wumpus_positions)
@@ -403,10 +454,42 @@ class DummyAgent(BaseAgent):
 
         if self.current_state:
             pos = self.current_state.get("position")
+            arrows = self.current_state.get("arrows", 0)
+
+
+            if self.Wumpus_positions:            
+                max_value = max(self.Wumpus_positions.values())
+
+                if list(self.Wumpus_positions.values()).count(max_value) == 1:
+                    print("Wumpus in this cell:", max_value)
+
+
+                # Se soubermos a posição do wumpus exatamente
+                if (
+                    self.Wumpus_detected
+                    and list(self.Wumpus_positions.values()).count(max_value) == 1
+                    and arrows > 0
+                ):
+
+                    wumpus_cell = max(
+                        self.Wumpus_positions,
+                        key=self.Wumpus_positions.get
+                    )
+                    wx, wy = map(int, wumpus_cell.split(","))
+
+                    # Vemos se o wumpus está adjacente
+                    for (dx, dy), direction in directions:
+                        nx, ny = pos[0] + dx, pos[1] + dy
+
+                        if nx == wx and ny == wy:
+                            print(f"Shooting Wumpus at {wumpus_cell} -> {direction}")
+                            self.last_action = ("shoot", direction)
+                            return ("shoot", direction)
 
             # Se um caminho do BFS estiver em progresso, corre-o um passo de cada vez.
             # Antes de andar o próximo passo, verifica se a próxima célula do caminho se tornou perigosa 
             # (ex: o agente morreu e resetou, ou descobriu um buraco que antes era desconhecido).
+
             if self.escape_path:
                 next_dir = self.escape_path[0]
                 if pos and next_dir in dir_to_delta:
@@ -466,6 +549,9 @@ class DummyAgent(BaseAgent):
                     priority = 1
                 else:
                     priority = 2
+
+                if self.Wumpus_positions.get(cell, 0) >= 2:
+                    continue
 
                 candidates.append((cell, name, priority, risk))
 
