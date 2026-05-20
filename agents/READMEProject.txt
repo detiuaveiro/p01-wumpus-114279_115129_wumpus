@@ -46,13 +46,13 @@ When this happens, we store the map information, namely its height and width. In
 
 Depending on the percepts, we update what may be adjacent to the agent.
 
-- stench : Any cell adjacent to the user is considered a possible Wumpus location
+- stench : Any cell adjacent to the agent is considered a possible Wumpus location
 - bump : The cell the agent attempted to move into is considered a wall
-- breeze : Any cell adjacent to the user is considered a possible pit location
+- breeze : Any cell adjacent to the agent is considered a possible pit location
 - scream : We remove the existence of the Wumpus from all of its possible positions
 
 Whenever we detect a percept, we update the dictionary corresponding to the nature of the cell associated with that percept.
-For example, when detecting breeze, we add 4 new possible pit locations. If those positions do not yet exist, we assign them a weight of +1. If a possible pit position already exists in that cell, then we increment its weight by +1. The same logic applies to the Wumpus.
+For example, when detecting breeze, we evaluate all adjacent cells as possible pit locations. If those positions do not yet exist, we assign them a weight of +1. If a possible pit position already exists in that cell, then we increment its weight by +1. The same logic applies to the Wumpus.
 
 After processing the conditions related to the percepts detected by our agent, we mark the current cell as safe and store it as the last visited cell.
 
@@ -62,7 +62,7 @@ After adding or updating cells, we verify whether the agent has already visited 
 
 Finally, we verify whether the agent was terminated by the Wumpus or by a pit. If it was terminated by a pit, we assign a large weight to the indices corresponding to our last position and add the confirmed pit/Wumpus to a Set. If termination occurred due to detecting gold, then we store the gold cell.
 
-### Deliberate / Action
+### Decision Making
 In this section, the agent applies algorithms ranging from simple approaches to Breadth-First Search algorithms, depending on the cells that still need to be visited.
 
 As an additional note, at the beginning we print all Sets in order to track the agent’s memory in case there is any incorrect information.
@@ -73,15 +73,21 @@ If we are aligned with the Wumpus and know that we must reach the gold, we shoot
 
 If we encounter a dangerous path and want to backtrack in order to explore cells that, despite being dangerous, are likely candidates, we apply an algorithm that backtracks to the last cell that originated a branch.
 
-After all these cases, if none of them are activated, we proceed with a normal solution in which the agent explores every safe cell before choosing the cell that presents the least danger.
+Also, to prevent the agent from becoming trapped in cyclic movement patterns, the implementation maintains a history of the last visited positions. If the same cell appears repeatedly, the agent activates a BFS-based escape strategy that first searches for safe unexplored cells and, if necessary, allows controlled traversal through uncertain cells.
 
+After all these cases, if none of them are activated, we proceed with a normal solution in which the agent explores every safe cell before choosing the cell that presents the least danger.
+Each suspected pit or Wumpus position is associated with a weight representing how many percepts support that hypothesis. Cells with lower accumulated risk are prioritized during exploration.
 
 ## Analysis of the Results
 With maps that contain few obstacles and have a well-defined path, the agent can solve them in 1 or 2 attempts, especially when it is uncertain between two cells. However, after exploring the safe path, it is able to consistently complete the route every subsequent time.
 
 In maps where, for example, the Wumpus blocks the path, the agent requires several attempts because the route to the gold is considered more dangerous due to the number of cells classified as pits that are, in reality, safe. However, once the agent detects that shooting the Wumpus is necessary in order to reach the target cell, it will always perform that shooting action regardless of the distance.
 
+Unlike a purely reactive agent, our implementation preserves confirmed information between simulation resets on the same map. This allows the agent to progressively improve its performance after each attempt.
 
+## Conclusion
+
+Overall, the agent combines probabilistic reasoning, memory persistence, and BFS-based pathfinding to progressively improve its performance across attempts. While uncertainty in early exploration may lead to risky decisions, the agent becomes increasingly efficient as more information about the environment is confirmed.
 
 ## License
 
